@@ -1,0 +1,14 @@
+{
+  "domain": "healthchecks",
+  "name": "Healthchecks",
+  "config_flow": true,
+  "documentation": "https://www.home-assistant.io/integrations/healthchecks",
+  "requirements": [],
+  "ssdp": [],
+  "zeroconf": [],
+  "homekit": {},
+  "dependencies": [],
+  "codeowners": [
+    "@kuchel77"
+  ]
+}
