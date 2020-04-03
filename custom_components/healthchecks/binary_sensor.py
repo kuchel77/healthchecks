@@ -1,47 +1,56 @@
 """Platform for Healthchecks integration."""
-from homeassistant.const import TEMP_CELSIUS
+from datetime import timedelta
+import logging
+import voluptuous as vol
+from pyhealthchecks import healthchecks
 from homeassistant.helpers.entity import Entity
-
+from homeassistant.components.binary_sensor import PLATFORM_SCHEMA
+from homeassistant.helpers.aiohttp_client import async_get_clientsession
+import homeassistant.helpers.config_validation as cv
+from homeassistant.util import Throttle
 
 SCAN_INTERVAL = timedelta(minutes=5)
 
-PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend(
-    {
-        vol.Required(CONF_PING_URL): cv.string,
-    }
-)
+CONF_PING_URL = "ping_url"
 
-def setup_platform(hass, config, add_entities, discovery_info=None):
+PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend({vol.Required(CONF_PING_URL): cv.string})
+
+_LOGGER = logging.getLogger(__name__)
+
+
+async def async_setup_platform(hass, config, async_add_entities, discovery_info=None):
     """Set up the sensor platform."""
     ping_url = config.get(CONF_PING_URL)
 
-    add_entities([HealthChecksSensor(ping_url=ping_url)])
+    session = async_get_clientsession(hass)
+
+    health_check = healthchecks.HealthChecks(
+        hass.loop, ping_url=ping_url, session=session
+    )
+
+    async_add_entities([HealthChecksBinarySensor(health_check=health_check)])
 
 
-class HealthChecksSensor(Entity):
+class HealthChecksBinarySensor(Entity):
     """Representation of a Sensor."""
 
-    def __init__(self, ping_url):
-        """Initialize the sensor."""
-        self._previous_update = None
-        self._ping_url = ping_url
+    def __init__(self, health_check):
+        """ Initialize the sensor. """
+        self._previous_update = False
+        self._health_check = health_check
 
     @property
     def name(self):
         """Return the name of the sensor."""
-        return 'Health Checks'
+        return "Health Checks"
 
-    @property
-    def device_class(self):
-        """Return the class of this sensor."""
-        return DEFAULT_DEVICE_CLASS
-    
     @property
     def is_on(self):
         """Return true if the binary sensor is on."""
         return self._previous_update
 
-
-    def update(self):
-        """TODO Sent the data and check"""
-        self._previous_update = False
+    @Throttle(SCAN_INTERVAL)
+    async def async_update(self, **kwargs):
+        """ Do an async http update """
+        await self._health_check.update_connection()
+        self._previous_update = self._health_check.status
